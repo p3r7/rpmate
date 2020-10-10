@@ -25,12 +25,20 @@ local rpm_disk_d = { 9, 12 , 7, 10 }
 
 local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
 
+-- UI
+local pages
+local tabs
+local tab_titles = {{"RPM"}, {"Cut"}, {"EQ"}, {"Dirty"}, {"HW Sampler Inst."}}
+local eq_l_dial
+local eq_m_dial
+local eq_h_dial
+
 local NUM_SAMPLES = 1 -- for timber init
 
 local ui = {
   plate = {
     x = 20,
-    y = 20,
+    y = 35,
 
     out_r = 15,
     in_r = 14,
@@ -163,8 +171,8 @@ function softcut_init()
   softcut.reset()
 
   audio.level_cut(1.0)
-  audio.level_adc_cut(1) -- listen analog input
-  audio.level_eng_cut(0) -- don't listen engine / sc
+  audio.level_adc_cut(1.0) -- listen analog input
+  audio.level_eng_cut(0.0) -- don't listen engine / sc
 
   for i=1, 2 do
     softcut.level(i,1)
@@ -273,7 +281,7 @@ end
 
 
 -- -------------------------------------------------------------------------
--- UI
+-- UI: TURNTABLE
 
 rpmate.inches_to_scaled_px = function(v)
   return math.floor(v * ui.plate.in_r / 12)
@@ -392,11 +400,21 @@ rpmate.draw_tt = function()
 
 end
 
+-- -------------------------------------------------------------------------
+-- UI: GENERAL
+
+local function update_pages()
+  tabs:set_index(1)
+  tabs.titles = tab_titles[pages.index]
+  -- env_status.text = ""
+  -- update_tabs()
+end
+
 rpmate.draw_rpm = function()
-  local x_k = 80
-  local x_v = 100
-  local y1 = 5
-  local y2 = 12
+  local x_k = 60
+  local x_v = x_k + 20
+  local y1 = 32
+  local y2 = y1 + 7
 
   screen.level(1)
 
@@ -457,6 +475,14 @@ rpmate.init = function()
 
   rpmate.update_rate(voice)
 
+  -- UI
+  pages = ui_lib.Pages.new(1, len(tab_titles))
+  tabs = ui_lib.Tabs.new(1, tab_titles[pages.index])
+
+  -- eq_l_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
+  -- eq_m_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
+  -- eq_h_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
+
 
   -- params:add_separator()
 end
@@ -495,10 +521,14 @@ function rpmate:enc(n, d)
 
   if n == 1 then
     -- 1: Record Volume
-    rec_vol = util.clamp(rec_vol + d / 100, 0, 1)
-    mix:set_raw("monitor", rec_vol)
-    audio.level_adc_cut(rec_vol)
-    softcut.rec_level(sel, rec_vol)
+    -- rec_vol = util.clamp(rec_vol + d / 100, 0, 1)
+    -- mix:set_raw("monitor", rec_vol)
+    -- audio.level_adc_cut(rec_vol)
+    -- softcut.rec_level(sel, rec_vol)
+
+    -- 1: Page scroll
+    pages:set_index_delta(util.clamp(d, -1, 1), false)
+    update_pages()
   elseif n == 2 then
     -- 3: Record Speed
     local op = 1
@@ -519,9 +549,16 @@ end
 function rpmate:redraw()
   -- print('redraw')
   screen.clear()
-  rpmate.draw_tt()
-  rpmate.draw_rpm()
-  -- rpmate.draw_bezier_test()
+
+  pages:redraw()
+  tabs:redraw()
+
+  if pages.index == 1 then
+    rpmate.draw_tt()
+    -- rpmate.draw_bezier_test()
+    rpmate.draw_rpm()
+  end
+
   screen.update()
 end
 
