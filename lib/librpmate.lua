@@ -512,12 +512,12 @@ function rpmate:key(n, z)
 end
 
 function rpmate:enc(n, d)
-  norns.encoders.set_sens(1,7)
-  norns.encoders.set_sens(2, (settings and 6 or 1))
-  norns.encoders.set_sens(3, (settings and (settings_list.index == (1 or 2 or 7 or 8))) and 1 or (not settings and (speed < -0.01 or speed > 0.01)) and 1 or 3)
+  norns.encoders.set_sens(1, 7)
+  norns.encoders.set_sens(2, 5)
+  norns.encoders.set_sens(3, 5)
   norns.encoders.set_accel(1, false)
   norns.encoders.set_accel(2, false)
-  norns.encoders.set_accel(3,(settings and settings_list.index < 5) and true or false)
+  norns.encoders.set_accel(3, false)
 
   if n == 1 then
     -- 1: Record Volume
