@@ -103,14 +103,14 @@ function engine_init_timber()
     }
     params:add_separator()
     Timber.add_sample_params(i, true, extra_params)
-    params:set('play_mode_' .. i, 4) -- "1-Shot" in options.PLAY_MODE_BUFFER
+    params:set('play_mode_' .. i, 3) -- "1-Shot" in options.PLAY_MODE_BUFFER
     --params:set('amp_env_sustain_' .. i, 0)
   end
 end
 
 function timber_toggle_play()
-  playing = not playing
-  if playing then
+  playing = timber_is_playing()
+  if not playing then
     print("play")
     timber_play()
   else
@@ -130,6 +130,27 @@ function timber_stop()
   engine.noteOff(sample_id)
 end
 
+function timber_is_playing()
+  local sample_id = 0
+  return len(Timber.samples_meta[sample_id].positions) ~= 0
+end
+
+function timber_has_sample_loaded()
+  return Timber.samples_meta[0].manual_load
+end
+
+function timber_free_up_sample()
+  if timber_has_sample_loaded() then
+    -- stop playing
+    if timber_is_playing() then
+      timber_stop()
+    end
+
+    -- clear previously set sample if any
+    Timber.clear_samples(0, 0)
+  end
+
+end
 
 -- -------------------------------------------------------------------------
 -- CORE HELPERS
@@ -227,6 +248,9 @@ function softcut_toggle_record()
 end
 
 function softcut_record_on()
+  timber_free_up_sample()
+
+  softcut_clear_buffers()
   for i=1, 2 do
     softcut.rec(i, 1)
   end
@@ -237,6 +261,14 @@ function softcut_record_off()
   for i=1, 2 do
     softcut.rec(i, 0)
     softcut.position(i, 0)
+  end
+end
+
+function softcut_clear_buffers()
+  for i=1, 2 do
+    softcut.buffer_clear(i)
+    softcut.position(i, 0)
+    state.rec.time = 0
   end
 end
 
@@ -267,12 +299,10 @@ function cut_to_engine()
 end
 
 function load_sample_file_to_engine_timber(smpl)
-  if Timber.samples_meta[0].manual_load then
-    -- clear previously set sample if any
-    Timber.clear_samples(0, 1)
-  end
-  Timber.load_sample(0, smpl)
   -- print(inspect(Timber.samples_meta[0]))
+  -- timber_free_up_sample()
+  Timber.load_sample(0, smpl)
+  -- params:set('play_mode_' .. 0, 3)
 end
 
 function load_sample_file_to_engine_glut(smpl)
@@ -505,8 +535,8 @@ function rpmate:key(n, z)
   end
   if n == 3 and z == 0 then
     if not recording and state.rec.time ~= 0 then
-      -- timber_toggle_play()
-      timber_play()
+      timber_toggle_play()
+      -- timber_play()
     end
   end
 end
