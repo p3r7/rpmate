@@ -19,9 +19,28 @@ local inspect = include('rpmate/lib/inspect')
 local playing, recording, filesel, settings, mounted, blink = false, false, false, false, false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
 
-local rpm_hz_list    = { 0.28, 0.55, 0.75, 1.3 }
-local rpm_label_list = { "16", "33", "45", "78" }
-local rpm_disk_d = { 9, 12 , 7, 10 }
+local rpm_hz_list    =  { 0.28, 0.55, 0.75, 1.3, 2.667, 8.667 }
+local rpm_label_list =  { "16", "33", "45", "78", "160", "520" }
+local rpm_device_list = { "tt-16", "tt-33", "tt-45", "tt-78", "edison-cylinder", "washing-machine" }
+local rpm_device_w =    { 26, 26, 26, 26, 27, 26 }
+local rpm_device_y =             { 20, 20, 20, 20, 10, 10 }
+local rpm_device_cnnx_rel_x =    { 17, 17, 17, 17, 17, 17 }
+local rpm_disk_d =      { 9, 12 , 7, 10 }
+
+local input_device_out_x = nil
+local norns_in_x = nil
+local norns_out_x = nil
+local sampler_in_x = nil
+
+local norns_w = 14
+local norns_in_rel_x = 6
+local norns_out_rel_x = 9
+
+local sampler_label_list =  { "MPC 2k", "S950", "SP-404" }
+local sampler_device_list = { "mpc-2k_2", "s950", "sp-404" }
+local sampler_device_w =    { 28, 33, 13 }
+local sampler_device_cnnx_rel_x =    { 17, 22, 5 }
+
 
 local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
 
@@ -61,6 +80,7 @@ local ui = {
 local state = {
   record_speed = 2,
   playback_speed = 2,
+  sampler = 1,
 
   -- rec
   rec = { arm = false, time = 0, start = 0, level = 1, pre = 1, threshold = 1 },
@@ -311,124 +331,109 @@ end
 
 
 -- -------------------------------------------------------------------------
--- UI: TURNTABLE
+-- UTILS: SCREEN POSITION
 
-rpmate.inches_to_scaled_px = function(v)
-  return math.floor(v * ui.plate.in_r / 12)
+rpmate.centered_x = function(w, max_w)
+  if not max_w then
+    max_w = 128
+  end
+  return math.floor((max_w - w) / 2)
 end
 
-rpmate.calculate_arm_head_x = function(arm_length, arm_base_x, arm_base_y, splindle_y, disk_r)
-  -- basically, Pythagorean theorem applied
-  -- arm_length = sqrt(y_rel² + x_rel²)
-  -- => x_rel = sqrt(|arm_length² - y_rel²|)
-
-  y_rel = (splindle_y - arm_base_y) + disk_r - ui.arm.delta_w_disk_edge
-  print("y_rel="..y_rel)
-
-  print("1: "..arm_length.." -> "..math.pow(arm_length, 2))
-  print("2: "..y_rel.." -> "..(math.pow(y_rel, 2)))
-  local x_rel = math.sqrt(math.pow(arm_length, 2) - math.pow(y_rel, 2))
-  print("=> "..x_rel)
-  return x_rel
+rpmate.centered_y = function(h, max_h)
+  if not max_h then
+    max_h = 64
+  end
+  return math.floor((max_h - h) / 2)
 end
 
+-- -------------------------------------------------------------------------
+-- UI: DEVICES
 
+rpmate.draw_device = function(device, x, y)
+  screen.display_png("/home/we/dust/code/rpmate/rsc/devices/"..device..".png", x, y)
+end
 
-rpmate.draw_bezier_test = function()
-  local x = 50
-  local y = 30
-  screen.level(6)
+rpmate.draw_connector = function(x, y)
+  screen.level(3)
+  screen.pixel(x-1, y)
+  screen.pixel(x,   y)
+  screen.pixel(x,   y-1)
+  screen.pixel(x,   y-2)
+  screen.pixel(x,   y-3)
+  screen.close()
+  screen.fill()
+end
+
+rpmate.draw_input_device = function()
+  local device = rpm_device_list[state.record_speed]
+  local w = rpm_device_w[state.record_speed]
+  local x = rpmate.centered_x(w, (128 - norns_w) / 2)
+
+  input_device_out_x = x + rpm_device_cnnx_rel_x[state.sampler]
+  rpmate.draw_connector(input_device_out_x, 19)
+
+  if device == "washing-machine" then
+    rpmate.draw_device(device, 0, rpm_device_y[state.record_speed])
+    -- screen.level(8)
+    -- screen.move(0, 40)
+    -- screen.text(rpm_label_list[state.record_speed])
+  else
+    rpmate.draw_device(device, x, rpm_device_y[state.record_speed])
+
+    local txt = rpm_label_list[state.record_speed].."RPM"
+    w = screen.text_extents(txt)
+    x = rpmate.centered_x(w, (128 - norns_w) / 2)
+    screen.level(8)
+    screen.move(x, 50)
+    screen.text(txt)
+  end
+end
+
+rpmate.draw_norns = function()
+  local w = norns_w
+  local x = rpmate.centered_x(w)
+
+  norns_in_x = x + norns_in_rel_x
+  norns_out_x = x + norns_out_rel_x
+
   screen.line_width(1)
-  screen.close()
-  screen.move(x, y)
-  -- screen.line_rel(0, 20)
-  screen.curve_rel(5, 5, 10, 10, 0, 20)
+  screen.move(input_device_out_x, 16)
+  screen.line(norns_in_x + 1, 16)
   screen.stroke()
+
+  rpmate.draw_connector(norns_in_x, 19)
+  rpmate.draw_connector(norns_out_x, 19)
+  rpmate.draw_device("norns", x, 20)
+
+  local txt = rpm_label_list[state.playback_speed].."RPM"
+  w = screen.text_extents(txt)
+  x = rpmate.centered_x(w)
+  screen.level(8)
+  screen.move(x, 50)
+  screen.text(txt)
 end
 
-rpmate.draw_tt = function()
+rpmate.draw_sampler = function()
+  local w = sampler_device_w[state.sampler]
+  local x = 64 + rpmate.centered_x(w, (128 + norns_w) / 2)
 
-  local plate_edge_l = 2
-  local plate_mat_l = 1
-  local out_plate_r = 15
-  local in_plate_r = 14
-  local disk_r = rpmate.inches_to_scaled_px(rpm_disk_d[state.record_speed])
-  local disk_l = 6
-
-  local x = ui.plate.x
-  local y = ui.plate.y
-
-  -- arm base
-  screen.level(ui.arm.base.l)
-  local y_d = ui.plate.out_r - 6
-  local arm_base_x = x + (ui.plate.out_r + 2)
-  local arm_base_y = y - y_d, ui.arm.base.r
-  screen.circle(arm_base_x, arm_base_y, ui.arm.base.r)
-  screen.fill()
-
-  -- disk_r
-
-  -- plate
-  screen.level(ui.plate.edge_l)
-  screen.circle(x, y, ui.plate.out_r)
-  screen.fill()
-  screen.level(ui.plate.mat_l)
-  screen.circle(x, y, ui.plate.in_r)
-  screen.fill()
-  -- record
-  screen.level(ui.plate.disk_l)
-  screen.circle(x, y, disk_r)
-  screen.fill()
-  -- splindle
-  screen.level(2)
-  screen.pixel(x, y)
-  screen.fill()
-  -- body
-  screen.level(2)
+  local in_x = x + sampler_device_cnnx_rel_x[state.sampler]
   screen.line_width(1)
-  screen.close()
-  screen.move(x - (ui.plate.out_r + 3),  y - (ui.plate.out_r + 3))
-  screen.line(x - (ui.plate.out_r + 3),  y + (ui.plate.out_r + 3))
-  screen.move(x - (ui.plate.out_r + 3),  y + (ui.plate.out_r + 3))
-  screen.line(x + (ui.plate.out_r + 10), y + (ui.plate.out_r + 2))
-  screen.move(x + (ui.plate.out_r + 10), y + (ui.plate.out_r + 2))
-  screen.line(x + (ui.plate.out_r + 10), y - (ui.plate.out_r + 2))
-  screen.move(x + (ui.plate.out_r + 10), y - (ui.plate.out_r + 2))
-  screen.line(x - (ui.plate.out_r + 3),  y - (ui.plate.out_r + 2))
+  screen.move(norns_out_x, 16)
+  screen.line(in_x + 1, 16)
   screen.stroke()
-  -- speed selector
-  -- screen.level(1)
-  -- screen.line_width(1)
-  -- screen.close()
-  -- screen.move(x + (ui.plate.out_r + 10) - 7,  y + (ui.plate.out_r + 2) - 13)
-  -- screen.line(x + (ui.plate.out_r + 10) - 4,  y + (ui.plate.out_r + 2) - 13)
-  -- screen.move(x + (ui.plate.out_r + 10) - 4,  y + (ui.plate.out_r + 2) - 13)
-  -- screen.line(x + (ui.plate.out_r + 10) - 4,  y + (ui.plate.out_r + 2) - 4)
-  -- screen.move(x + (ui.plate.out_r + 10) - 4,  y + (ui.plate.out_r + 2) - 4)
-  -- screen.line(x + (ui.plate.out_r + 10) - 7,  y + (ui.plate.out_r + 2) - 4)
-  -- screen.move(x + (ui.plate.out_r + 10) - 7,  y + (ui.plate.out_r + 2) - 4)
-  -- screen.line(x + (ui.plate.out_r + 10) - 7,  y + (ui.plate.out_r + 2) - 14)
-  -- screen.stroke()
+  rpmate.draw_connector(in_x, 19)
+  rpmate.draw_device(sampler_device_list[state.sampler], x, 20)
 
-
-  -- arm
-  arm_rel_x = rpmate.calculate_arm_head_x(ui.arm.length, arm_base_x, arm_base_y, y, disk_r)
-  arm_abs_x = arm_base_x - arm_rel_x
-  arm_abs_y = y + disk_r - ui.arm.delta_w_disk_edge
-  arm_rel_y = (y - arm_base_y) + disk_r - ui.arm.delta_w_disk_edge
-
-  screen.level(ui.arm.l)
-  screen.line_width(1.9)
-  screen.close()
-  screen.move(arm_base_x, arm_base_y)
-  print("From: ("..arm_base_x..","..arm_base_y..")")
-  -- screen.line(arm_abs_x, arm_abs_y)
-  screen.line_rel(-arm_rel_x, arm_rel_y)
-  -- screen.curve_rel(-3, 15, 10, -10, -arm_rel_x, arm_rel_y)
-  print("To: ("..arm_abs_x..","..arm_abs_y..")")
-  screen.stroke()
-
+  local txt = sampler_label_list[state.sampler]
+  w = screen.text_extents(txt)
+  x = 64 + rpmate.centered_x(w, (128 + norns_w) / 2)
+  screen.level(8)
+  screen.move(x, 50)
+  screen.text(txt)
 end
+
 
 -- -------------------------------------------------------------------------
 -- UI: GENERAL
@@ -568,7 +573,8 @@ function rpmate:enc(n, d)
     -- 3: Playback Speed
     local op = 1
     if d < 0 then op = -1 end
-    state.playback_speed = util.clamp(state.playback_speed + op, 1, len(rpm_hz_list))
+    -- state.playback_speed = util.clamp(state.playback_speed + op, 1, len(rpm_hz_list))
+    state.sampler = util.clamp(state.sampler + op, 1, len(sampler_device_list))
   end
   rpmate.update_rate()
   -- print('enc', n, d)
@@ -584,9 +590,11 @@ function rpmate:redraw()
   tabs:redraw()
 
   if pages.index == 1 then
-    rpmate.draw_tt()
-    -- rpmate.draw_bezier_test()
-    rpmate.draw_rpm()
+    rpmate.draw_input_device()
+    rpmate.draw_norns()
+    rpmate.draw_sampler()
+
+    -- rpmate.draw_rpm()
   end
 
   screen.update()
