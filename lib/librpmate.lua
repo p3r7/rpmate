@@ -196,7 +196,7 @@ function softcut_init()
   audio.level_eng_cut(0.0) -- don't listen engine / sc
 
   for i=1, 2 do
-    softcut.level(i,1)
+    softcut.level(i, 1.0)
     softcut.level_slew_time(i, 0.1)
     softcut.play(i, 0)
     softcut.rate(i, 1)
