@@ -5,16 +5,24 @@
 
 
 -- -------------------------------------------------------------------------
--- VARS
+-- IMPORTS
 
-local rpmate = {}
-
+-- local math = require "math"
 local ui_lib = require "ui"
 local fileselect = require "fileselect"
 local textentry = require "textentry"
 local MusicUtil = require "musicutil"
 
 local inspect = include('rpmate/lib/inspect')
+
+
+-- -------------------------------------------------------------------------
+-- STATE
+
+local rpmate = {}
+
+local shift = false
+local screen_dirty = false
 
 local playing, recording, filesel, settings, mounted, blink = false, false, false, false, false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
@@ -47,7 +55,7 @@ local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
 -- UI
 local pages
 local tabs
-local tab_titles = {{"RPM"}, {"Cut"}, {"EQ"}, {"Dirty"}, {"HW Sampler Inst."}}
+local tab_titles = {{"RPMate"}, {"Cut"}, {"EQ"}, {"Dirty"}, {"HW Sampler Inst."}}
 local eq_l_dial
 local eq_m_dial
 local eq_h_dial
@@ -101,9 +109,9 @@ function unrequire(name)
   _G[name] = nil
 end
 
-unrequire("timber/lib/timber_engine")
-local Timber = include("timber/lib/timber_engine")
-engine.name = "Timber"
+unrequire("rpmate/lib/timbereq_engine")
+local Timber = include("rpmate/lib/timbereq_engine")
+engine.name = "TimberEq"
 
 
 function engine_init_timber()
@@ -347,6 +355,46 @@ rpmate.centered_y = function(h, max_h)
   return math.floor((max_h - h) / 2)
 end
 
+
+-- -------------------------------------------------------------------------
+-- UI: ACTIONS
+
+rpmate.draw_action_rec = function()
+  local r = 4
+  local w = r * 2
+  local x = rpmate.centered_x(w) + r
+  local y = 35
+  screen.aa(1)
+  screen.level(15)
+  screen.move(x, y)
+  screen.circle(x, y, r)
+  screen.fill()
+  screen.aa(0)
+end
+
+rpmate.draw_action_play = function()
+  local w = 8
+  local h = 8
+  local x = rpmate.centered_x(w)
+  local y = 35
+  screen.aa(1)
+  screen.level(15)
+  screen.move(x, y - h / 2)
+  screen.line_rel(0, h)
+  screen.line_rel(w, - h / 2)
+  screen.line(x, y - h / 2)
+  screen.fill()
+  screen.aa(0)
+end
+
+rpmate.draw_action = function()
+  if timber_is_playing() then
+    rpmate.draw_action_play()
+  elseif recording then
+    rpmate.draw_action_rec()
+  end
+end
+
 -- -------------------------------------------------------------------------
 -- UI: DEVICES
 
@@ -518,8 +566,20 @@ rpmate.init = function()
   -- eq_m_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
   -- eq_h_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
 
-
   -- params:add_separator()
+
+  local redraw_fps = 30
+  clock.run(
+    function()
+      local step_s = 1 / redraw_fps
+      while true do
+        clock.sleep(step_s)
+        if screen_dirty then
+          rpmate:redraw()
+          screen_dirty = false
+        end
+      end
+  end)
 end
 
 
@@ -533,15 +593,24 @@ end
 -- STD API
 
 function rpmate:key(n, z)
-  -- print('key', n, z)
+  if n == 1 then
+    if z == 1 then
+      shift = true
+    else
+      shift = false
+    end
+  end
 
   if n == 2 and z == 0 then
     softcut_toggle_record()
+    screen_dirty = true
   end
+
   if n == 3 and z == 0 then
     if not recording and state.rec.time ~= 0 then
       timber_toggle_play()
       -- timber_play()
+      screen_dirty = true
     end
   end
 end
@@ -573,13 +642,16 @@ function rpmate:enc(n, d)
     -- 3: Playback Speed
     local op = 1
     if d < 0 then op = -1 end
-    -- state.playback_speed = util.clamp(state.playback_speed + op, 1, len(rpm_hz_list))
-    state.sampler = util.clamp(state.sampler + op, 1, len(sampler_device_list))
+    if shift then
+      state.sampler = util.clamp(state.sampler + op, 1, len(sampler_device_list))
+    else
+      state.playback_speed = util.clamp(state.playback_speed + op, 1, len(rpm_hz_list))
+    end
   end
   rpmate.update_rate()
   -- print('enc', n, d)
 
-  rpmate:redraw()
+  screen_dirty = true
 end
 
 function rpmate:redraw()
@@ -593,6 +665,9 @@ function rpmate:redraw()
     rpmate.draw_input_device()
     rpmate.draw_norns()
     rpmate.draw_sampler()
+
+    rpmate.draw_action()
+    -- rpmate.draw_action_play()
 
     -- rpmate.draw_rpm()
   end
