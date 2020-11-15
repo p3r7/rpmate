@@ -66,6 +66,14 @@ local sampler_device_cnnx_rel_x =    { 17, 22, 5 }
 
 
 -- -------------------------------------------------------------------------
+-- STATE: CLOCKS
+
+local redraw_clock
+local playback_check_clock
+local input_level_poll_clock
+
+
+-- -------------------------------------------------------------------------
 -- STATE: I/O
 
 local shift = false
@@ -774,9 +782,10 @@ rpmate.init = function()
 
   -- co-routine: screen redraw
   local redraw_fps = 30
-  clock.run(
+  redraw_clock = clock.run(
     function()
       local step_s = 1 / redraw_fps
+      print("waiting for "..step_s.." seconds")
       while true do
         clock.sleep(step_s)
         if screen_dirty then
@@ -787,7 +796,7 @@ rpmate.init = function()
   end)
 
   -- co-routine: playback state check
-  clock.run(
+  playback_check_clock = clock.run(
     function()
       local step_s = 1 / redraw_fps
       while true do
@@ -808,6 +817,11 @@ function rpmate:cleanup()
   audio.rev_on()
 
   poll:clear_all()
+
+  clock.cancel(redraw_clock)
+  clock.cancel(playback_check_clock)
+  clock.cancel(input_level_poll_clock)
+
   print('cleanup')
 end
 
