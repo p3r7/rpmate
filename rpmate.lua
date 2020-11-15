@@ -1,16 +1,19 @@
 -- rpmate.
 --
--- @eigenbahn
+-- @eigen
 -- llllllll.co/t/rpmate
 --
 --
--- hold btn 1 for settings
--- btn 2 play / pause
--- btn 3 rec on/off
+-- norns as a sampler budy.
 --
--- enc 1 - switch track
--- enc 2 - change speed
--- enc 3 - overdub level
+-- K1 held is SHIFT
+--
+-- E2: record speed
+-- E3: playback speed
+-- SHIFT + E3: sampler model
+--
+-- K2: record start/stop
+-- K3: playback start/stop
 
 local rpmate = include('rpmate/lib/librpmate')
 
