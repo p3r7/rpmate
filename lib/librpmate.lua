@@ -23,6 +23,12 @@ local inspect = include('rpmate/lib/inspect')
 
 
 -- -------------------------------------------------------------------------
+-- MODULE VAR
+
+local rpmate = {}
+
+
+-- -------------------------------------------------------------------------
 -- CONSTANTS
 
 -- Timber
@@ -38,14 +44,19 @@ local rpm_label_list =  { "16", "33", "45", "78", "160", "520" }
 
 -- devices: input
 local rpm_device_list = { "tt-16", "tt-33", "tt-45", "tt-78", "edison-cylinder", "washing-machine" }
-local rpm_device_w =    { 26, 26, 26, 26, 27, 26 }
+local rpm_device_w =    { 26, 26, 26, 26, 27, 100 }
 local rpm_device_y =             { 20, 20, 20, 20, 10, 10 }
-local rpm_device_cnnx_rel_x =    { 17, 17, 17, 17, 17, 17 }
+local rpm_device_cnnx_rel_x =    { 17, 17, 17, 17, 17, 0 }
+local rpm_device_cnnx_rel_y =    { 0, 0, 0, 0, 20, 0 }
 
 -- device: norns
 local norns_w = 14
 local norns_in_rel_x = 6
 local norns_out_rel_x = 9
+local norns_x = nil
+local norns_in_x = nil
+local norns_out_x = nil
+
 
 -- devices: hw samplers
 local sampler_label_list =  { "MPC 2k", "S950", "SP-404" }
@@ -73,15 +84,11 @@ local eq_h_dial
 
 -- devices connectors
 local input_device_out_x = nil
-local norns_in_x = nil
-local norns_out_x = nil
 local sampler_in_x = nil
 
 
 -- -------------------------------------------------------------------------
 -- STATE: FUNCTIONAL
-
-local rpmate = {}
 
 local playing, recording = false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
@@ -569,8 +576,16 @@ rpmate.draw_input_device = function()
   local w = rpm_device_w[state.record_speed]
   local x = rpmate.centered_x(w, (128 - norns_w) / 2)
 
+  -- connector
   input_device_out_x = x + rpm_device_cnnx_rel_x[state.sampler]
   rpmate.draw_connector(input_device_out_x, 19)
+
+  -- wire towards norns
+  screen.level(8)
+  screen.line_width(1)
+  screen.move(input_device_out_x, 16)
+  screen.line(norns_in_x + 1, 16)
+  screen.stroke()
 
   if device == "washing-machine" then
     rpmate.draw_device(device, 0, rpm_device_y[state.record_speed])
@@ -592,19 +607,11 @@ end
 --- Draw norns device
 rpmate.draw_norns = function()
   local w = norns_w
-  local x = rpmate.centered_x(w)
-
-  norns_in_x = x + norns_in_rel_x
-  norns_out_x = x + norns_out_rel_x
-
-  screen.line_width(1)
-  screen.move(input_device_out_x, 16)
-  screen.line(norns_in_x + 1, 16)
-  screen.stroke()
+  local x = norns_x
 
   rpmate.draw_connector(norns_in_x, 19)
   rpmate.draw_connector(norns_out_x, 19)
-  rpmate.draw_device("norns", x, 20)
+  rpmate.draw_device("norns", norns_x, 20)
 
   local txt = rpm_label_list[state.playback_speed].."RPM"
   w = screen.text_extents(txt)
@@ -645,6 +652,7 @@ rpmate.init = function()
 
   -- tmp recording storage
   if not util.file_exists(tmp_record_folder) then util.make_dir(tmp_record_folder) end
+
 
 
   params:add_separator()
@@ -690,6 +698,10 @@ rpmate.init = function()
   -- eq_l_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
   -- eq_m_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
   -- eq_h_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
+
+  norns_x = rpmate.centered_x(norns_w)
+  norns_in_x = norns_x + norns_in_rel_x
+  norns_out_x = norns_x + norns_out_rel_x
 
   -- params:add_separator()
 
