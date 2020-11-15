@@ -28,6 +28,7 @@ local screen_dirty = false
 local playing, recording, filesel, settings, mounted, blink = false, false, false, false, false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
 
+local waiting = false
 local timber_was_playing = false
 
 local rpm_hz_list    =  { 0.28, 0.55, 0.75, 1.3, 2.667, 8.667 }
@@ -324,12 +325,16 @@ end
 
 function cut_to_engine()
   local cutsample = tmp_record_folder.."buffer.wav"
-
   clock.run(function()
+      waiting = true
+
       -- softcut.buffer_write_stereo(cutsample, 0, -1)
       softcut.buffer_write_stereo(cutsample, 0, state.rec.time)
-      clock.sleep(2) -- wait a bit to prevent race condition
+      clock.sleep(0.2) -- wait a bit to prevent race condition
       load_sample_file_to_engine_timber(cutsample)
+
+      waiting = false
+      screen_dirty = true
   end)
 end
 
@@ -382,6 +387,16 @@ rpmate.draw_action_rec = function()
   screen.aa(0)
 end
 
+rpmate.draw_action_wait = function()
+  local txt = "..."
+  local w = screen.text_extents(txt)
+  local x = rpmate.centered_x(w)
+  local y = 35
+  screen.level(15)
+  screen.move(x, y)
+  screen.text(txt)
+end
+
 rpmate.draw_action_play = function()
   local w = 8
   local h = 8
@@ -400,6 +415,8 @@ end
 rpmate.draw_action = function()
   if timber_is_playing() then
     rpmate.draw_action_play()
+  elseif waiting then
+    rpmate.draw_action_wait()
   elseif recording then
     rpmate.draw_action_rec()
   end
