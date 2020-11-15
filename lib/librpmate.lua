@@ -59,7 +59,7 @@ local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
 -- UI
 local pages
 local tabs
-local tab_titles = {{"RPMate"}, {"Cut"}, {"EQ"}, {"Dirty"}, {"HW Sampler Inst."}}
+local tab_titles = {{"RPMate"}, {"HW Sampler Inst."}, {"Cut"}, {"EQ"}, {"Dirty"}}
 local eq_l_dial
 local eq_m_dial
 local eq_h_dial
