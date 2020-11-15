@@ -5,6 +5,12 @@
 -- llllllll.co/t/RPMate
 
 
+-- TODO:
+-- - fine playback speed VS % pitch (up to -/+16, like on a turntable)
+-- - hw sampler instructions: pitch ratio (half/quarter...)
+-- - digital input gain w/ visualization
+
+
 -- -------------------------------------------------------------------------
 -- IMPORTS
 
@@ -55,6 +61,7 @@ local sampler_device_cnnx_rel_x =    { 17, 22, 5 }
 
 
 local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
+-- local tmp_record_folder = '/home/we/dust/audio/'..'rpmate_tmp/'
 
 -- UI
 local pages
@@ -63,6 +70,26 @@ local tab_titles = {{"RPMate"}, {"HW Sampler Inst."}, {"Cut"}, {"EQ"}, {"Dirty"}
 local eq_l_dial
 local eq_m_dial
 local eq_h_dial
+
+
+-- MPC instructions:
+--
+-- TUNE 10 ~= 1 semitone
+-- not exactly correct as:
+--  - 33RPM -> 45RPM: 12 * log2(45/33) = 5.369 and not 5.1
+--  - 33RPM -> 78RPM: 12 * log2(78/33) = 14.89 and not 14.4
+--
+-- in fact: MPC semitones = ceil(real semitones * 9.675)
+--
+-- 33RPM -> 45RPM:
+--  - TUNE -51
+--  - +16% PITCH - TUNE -78
+--    12 * log2((45+(16*45/100))/33) = 7.93
+-- 33RPM -> 78RPM:
+--  - TUNE -144
+--  - -16% PITCH - TUNE -116
+--    12 * log2((78-(16*78/100))/33) = 11.873
+
 
 local NUM_SAMPLES = 1 -- for timber init
 
@@ -106,18 +133,86 @@ local state = {
 
 
 -- -------------------------------------------------------------------------
--- TIMBER SC ENGINE
+-- CORE HELPERS
 
 function unrequire(name)
   package.loaded[name] = nil
   _G[name] = nil
 end
 
+function len(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
+end
+
+
+-- -------------------------------------------------------------------------
+-- MATH: SPEED, RATE, PITCH
+
+rpmate.log2 = function(v)
+  return math.log(v) / math.log(2)
+end
+
+--- Converts semitones shift to corresponding playback speed
+-- pure function
+-- @param semitones number of semitones shifted
+-- @param divisions number of semitones division (in an octave), defaults to 12
+rpmate.semitones_to_playback_speed = function(semitones, divisions)
+  if not divisions then
+    divisions = 12
+  end
+  return 2 ^ (semitones / divisions)
+end
+
+--- Converts playback speed to corresponding semitones shift
+-- pure function
+-- @param playback_speed ratio playback_speed/record_speed, between 0..1 (not %-normalized)
+-- @param divisions number of semitones division (in an octave), defaults to 12
+rpmate.playback_speed_to_semitones = function(playback_speed, divisions)
+  if not divisions then
+    divisions = 12
+  end
+  return divisions * rpmate.log2(playback_speed)
+end
+
+
+-- -------------------------------------------------------------------------
+-- MATH: HW SAMPLER-SPECIFIC
+
+--- Converts semitones to MPC "TUNE" unit
+-- 1 semitone is roughly 10 MPC "TUNEs"
+-- @param semitones number of semitones shift induced by playback speed
+rpmate.semitones_to_mpc_tune = function(semitones)
+  return math.ceil(semitones * 9.675)
+end
+
+
+-- -------------------------------------------------------------------------
+-- CURRENT PLAYBACK RATIO STATE
+
+--- Get current playback ratio
+rpmate.current_playback_ratio = function()
+  local in_hz = rpm_hz_list[state.record_speed]
+  local out_hz = rpm_hz_list[state.playback_speed]
+  return out_hz / in_hz
+end
+
+rpmate.get_current_semitones_shift = function()
+  local n = rpmate.current_playback_ratio()
+  return rpmate.playback_speed_to_semitones(n)
+end
+
+
+-- -------------------------------------------------------------------------
+-- TIMBER SC ENGINE
+
 unrequire("rpmate/lib/timbereq_engine")
 local Timber = include("rpmate/lib/timbereq_engine")
 engine.name = "TimberEq"
 
 
+--- Timber Engine init phase
 function engine_init_timber()
   -- params:add_trigger('load_f','+ Load Folder')
   -- params:set_action('load_f', function() Timber.FileSelect.enter(_path.audio, function(file)
@@ -140,6 +235,18 @@ function engine_init_timber()
   end
 end
 
+--- Load sample file into Timber
+-- @param smpl pth to sample on disk
+function timber_load_sample(smpl)
+  timber_free_up_sample()
+  params:set('sample_'..0, smpl)
+
+  -- NB: not working as expected:
+  -- Timber.load_sample(0, smpl)
+  -- params:set('play_mode_' .. 0, 3)
+end
+
+--- Toggle playback of currently loaded sample
 function timber_toggle_play()
   playing = timber_is_playing()
   if not playing then
@@ -151,27 +258,32 @@ function timber_toggle_play()
   end
 end
 
+--- Play currently loaded sample
 function timber_play()
   local sample_id = 0
   local vel = 1
   engine.noteOn(sample_id, MusicUtil.note_num_to_freq(60), vel, sample_id)
 end
 
+--- Stop playing currently loaded sample
 function timber_stop()
   local sample_id = 0
   engine.noteOff(sample_id)
 end
 
+--- Predicate, is Timber playing the sample?
 function timber_is_playing()
   local sample_id = 0
   -- REVIEW: '#' shorthand for length doesn't appear to work
   return len(Timber.samples_meta[sample_id].positions) ~= 0
 end
 
+--- Predicate, has Timber a sample loaded?
 function timber_has_sample_loaded()
   return Timber.samples_meta[0].manual_load
 end
 
+--- If applicable, stop playing the sample and unload it
 function timber_free_up_sample()
   if timber_has_sample_loaded() then
     -- stop playing
@@ -185,42 +297,17 @@ function timber_free_up_sample()
   params:set('clear_'..0, true)
 end
 
--- -------------------------------------------------------------------------
--- CORE HELPERS
-
-function len(T)
-  local count = 0
-  for _ in pairs(T) do count = count + 1 end
-  return count
-end
-
-
--- -------------------------------------------------------------------------
--- HELPERS
-
-rpmate.update_rate = function(voice)
-  local in_hz = rpm_hz_list[state.record_speed]
-  local out_hz = rpm_hz_list[state.playback_speed]
-  -- print("in_hz="..in_hz)
-  -- print("out_hz="..out_hz)
-
-  local n = out_hz / in_hz
-  -- print("playback_speed="..n)
-
-  -- if playing then softcut.rate(voice, n) end
-
-  -- if state.rec.time ~= 0 then
-  --   -- Timber.setArgOnSample(0, "pitchBendSampleRatio", 1)
-  -- end
-  -- if Timber.samples_meta[0].manual_load then
+--- Update current Timber sample playback speed
+timber_update_current_playback_rate = function()
+  local n = rpmate.current_playback_ratio()
   params:set('by_percentage_'..0, n * 100)
-  -- end
 end
 
 
 -- -------------------------------------------------------------------------
 -- SOFTCUT
 
+--- Softcut init phase
 function softcut_init()
   softcut.reset()
 
@@ -254,13 +341,15 @@ function softcut_init()
   softcut.pan(1, -1.0)
   softcut.pan(2, 1.0)
 
-  softcut.event_phase(rpmate.phase)
+  softcut.event_phase(softcut_event_phase)
   softcut.poll_start_phase()
 end
 
 
--- NB: softcut event phase
-rpmate.phase = function(voice, x)
+--- Softcut event phase
+-- @param voice current softcut voice
+-- @param x time since record / playback
+softcut_event_phase = function(voice, x)
   -- if playing then
   --   state.time = x
   -- end
@@ -268,6 +357,7 @@ rpmate.phase = function(voice, x)
   if recording then state.rec.time = x end
 end
 
+--- Toggle Softcut record start / stop
 function softcut_toggle_record()
   recording = not recording
   if recording then
@@ -280,6 +370,7 @@ function softcut_toggle_record()
   end
 end
 
+--- Start Softcut record in buffer
 function softcut_record_on()
   timber_free_up_sample()
 
@@ -290,6 +381,7 @@ function softcut_record_on()
   -- state.rec.time = util.time()
 end
 
+--- Stop Softcut record in buffer
 function softcut_record_off()
   for i=1, 2 do
     softcut.rec(i, 0)
@@ -297,6 +389,7 @@ function softcut_record_off()
   end
 end
 
+--- Clear Softcut buffers
 function softcut_clear_buffers()
   for i=1, 2 do
     softcut.buffer_clear(i)
@@ -305,6 +398,8 @@ function softcut_clear_buffers()
   end
 end
 
+--- Play Softcut voices (mapped to buffers)
+-- unused
 function softcut_play()
   for i=1, 2 do
     softcut.position(i, 0)
@@ -312,6 +407,8 @@ function softcut_play()
   end
 end
 
+--- Stop playing Softcut voices (mapped to buffers)
+-- unused
 function softcut_stop()
   for i=1, 2 do
     softcut.position(i, 0)
@@ -319,10 +416,21 @@ function softcut_stop()
   end
 end
 
+--- Update current Softcut buffer playback speed
+-- unused
+sofcut_update_current_playback_rate = function()
+  local n = rpmate.current_playback_ratio()
+  for i=1, 2 do
+    softcut.rate(0, n)
+  end
+end
+
 
 -- -------------------------------------------------------------------------
 -- SOFTCUT -> ENGINE PASSTHROUGH
 
+--- Load Softcut buffer into Timber
+-- Uses a temporary file
 function cut_to_engine()
   local cutsample = tmp_record_folder.."buffer.wav"
   clock.run(function()
@@ -331,31 +439,23 @@ function cut_to_engine()
       -- softcut.buffer_write_stereo(cutsample, 0, -1)
       softcut.buffer_write_stereo(cutsample, 0, state.rec.time)
       clock.sleep(0.2) -- wait a bit to prevent race condition
-      load_sample_file_to_engine_timber(cutsample)
+      timber_load_sample(cutsample)
+      timber_update_current_playback_rate()
 
       waiting = false
       screen_dirty = true
   end)
 end
 
-function load_sample_file_to_engine_timber(smpl)
-
-  timber_free_up_sample()
-  params:set('sample_'..0, smpl)
-
-  -- NB: not working as expected:
-  -- Timber.load_sample(0, smpl)
-  -- params:set('play_mode_' .. 0, 3)
-end
-
-function load_sample_file_to_engine_glut(smpl)
-  params:set("1sample", smpl)
-end
 
 
 -- -------------------------------------------------------------------------
 -- UTILS: SCREEN POSITION
 
+--- Calculate centered x position of element onto surface
+-- pure function
+-- @param w element width
+-- @param max_w surface width, defaults to 128
 rpmate.centered_x = function(w, max_w)
   if not max_w then
     max_w = 128
@@ -363,6 +463,10 @@ rpmate.centered_x = function(w, max_w)
   return math.floor((max_w - w) / 2)
 end
 
+--- Calculate centered y position of element onto surface
+-- pure function
+-- @param h element height
+-- @param max_h surface height, defaults to 64
 rpmate.centered_y = function(h, max_h)
   if not max_h then
     max_h = 64
@@ -372,8 +476,22 @@ end
 
 
 -- -------------------------------------------------------------------------
+-- UI: PAGES
+
+--- Update pages/tabs
+local function update_pages()
+  tabs:set_index(1)
+  tabs.titles = tab_titles[pages.index]
+  -- env_status.text = ""
+  -- update_tabs()
+end
+
+
+-- -------------------------------------------------------------------------
 -- UI: ACTIONS
 
+--- Draw recording icon
+-- stateless
 rpmate.draw_action_rec = function()
   local r = 4
   local w = r * 2
@@ -387,6 +505,8 @@ rpmate.draw_action_rec = function()
   screen.aa(0)
 end
 
+--- Draw waiting icon
+-- stateless
 rpmate.draw_action_wait = function()
   local txt = "..."
   local w = screen.text_extents(txt)
@@ -397,6 +517,8 @@ rpmate.draw_action_wait = function()
   screen.text(txt)
 end
 
+--- Draw playing icon
+-- stateless
 rpmate.draw_action_play = function()
   local w = 8
   local h = 8
@@ -412,6 +534,7 @@ rpmate.draw_action_play = function()
   screen.aa(0)
 end
 
+--- Draw corresponding icon if an action is being performed
 rpmate.draw_action = function()
   if timber_is_playing() then
     rpmate.draw_action_play()
@@ -422,13 +545,21 @@ rpmate.draw_action = function()
   end
 end
 
--- -------------------------------------------------------------------------
--- UI: DEVICES
 
+-- -------------------------------------------------------------------------
+-- UI: MAIN PAGE (DEVICES)
+
+--- Draw device on screen
+-- @param device hardware sampler name
+-- @param x X position
+-- @param y Y position
 rpmate.draw_device = function(device, x, y)
   screen.display_png("/home/we/dust/code/rpmate/rsc/devices/"..device..".png", x, y)
 end
 
+--- Draw connector (jack) at the back/front of device
+-- @param x X position
+-- @param y Y position
 rpmate.draw_connector = function(x, y)
   screen.level(3)
   screen.pixel(x-1, y)
@@ -440,6 +571,7 @@ rpmate.draw_connector = function(x, y)
   screen.fill()
 end
 
+--- Draw current input (sound source) device
 rpmate.draw_input_device = function()
   local device = rpm_device_list[state.record_speed]
   local w = rpm_device_w[state.record_speed]
@@ -465,6 +597,7 @@ rpmate.draw_input_device = function()
   end
 end
 
+--- Draw norns device
 rpmate.draw_norns = function()
   local w = norns_w
   local x = rpmate.centered_x(w)
@@ -489,6 +622,7 @@ rpmate.draw_norns = function()
   screen.text(txt)
 end
 
+--- Draw current hardware sampler device
 rpmate.draw_sampler = function()
   local w = sampler_device_w[state.sampler]
   local x = 64 + rpmate.centered_x(w, (128 + norns_w) / 2)
@@ -510,34 +644,6 @@ rpmate.draw_sampler = function()
 end
 
 
--- -------------------------------------------------------------------------
--- UI: GENERAL
-
-local function update_pages()
-  tabs:set_index(1)
-  tabs.titles = tab_titles[pages.index]
-  -- env_status.text = ""
-  -- update_tabs()
-end
-
-rpmate.draw_rpm = function()
-  local x_k = 60
-  local x_v = x_k + 20
-  local y1 = 32
-  local y2 = y1 + 7
-
-  screen.level(1)
-
-  screen.move(x_k, y1)
-  screen.text("Rec:")
-  screen.move(x_v, y1)
-  screen.text(rpm_label_list[state.record_speed].."RPM")
-
-  screen.move(x_k, y2)
-  screen.text("Play:")
-  screen.move(x_v, y2)
-  screen.text(rpm_label_list[state.playback_speed].."RPM")
-end
 
 
 -- -------------------------------------------------------------------------
@@ -583,7 +689,7 @@ rpmate.init = function()
   vu_l:start()
   vu_r:start()
 
-  rpmate.update_rate(voice)
+  timber_update_current_playback_rate()
 
   -- UI
   pages = ui_lib.Pages.new(1, #tab_titles)
@@ -651,6 +757,10 @@ function rpmate:key(n, z)
   end
 
   if n == 3 and z == 0 then
+    print("attempt to play")
+    print("recording: "..tostring(recording))
+    print("record duration: "..state.rec.time)
+
     if not recording and state.rec.time ~= 0 then
       timber_toggle_play()
       -- timber_play()
@@ -682,17 +792,19 @@ function rpmate:enc(n, d)
     local op = 1
     if d < 0 then op = -1 end
     state.record_speed = util.clamp(state.record_speed + op, 1, #rpm_hz_list)
+    timber_update_current_playback_rate()
   elseif n == 3 then
-    -- 3: Playback Speed
     local op = 1
     if d < 0 then op = -1 end
-    if shift then
-      state.sampler = util.clamp(state.sampler + op, 1, #sampler_device_list)
-    else
+    if not shift then
+      -- 3: Playback Speed
       state.playback_speed = util.clamp(state.playback_speed + op, 1, #rpm_hz_list)
+      timber_update_current_playback_rate()
+    else
+      -- Shift+3: HW Sampler Model
+      state.sampler = util.clamp(state.sampler + op, 1, #sampler_device_list)
     end
   end
-  rpmate.update_rate()
   -- print('enc', n, d)
 
   screen_dirty = true
@@ -711,9 +823,6 @@ function rpmate:redraw()
     rpmate.draw_sampler()
 
     rpmate.draw_action()
-    -- rpmate.draw_action_play()
-
-    -- rpmate.draw_rpm()
   end
 
   screen.update()
