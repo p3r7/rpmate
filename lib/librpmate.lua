@@ -848,33 +848,36 @@ rpmate.init = function()
       end
   end)
 
-  -- -- -- co-routine: input monitor
-  -- audio.monitor_stereo()
-  -- -- Poll Left
-  -- p_amp_in_l = poll.set("amp_in_l")
-  -- p_amp_in_l.time = 1 / 15
-  -- p_amp_in_l.callback = function(val)
-  --   signal.amp_in_l = val
-  --   if signal.amp_in_l > signal.amp_in_l_max then
-  --     signal.amp_in_l_max = signal.amp_in_l
-  --   end
-  -- end
-  -- p_amp_in_r = poll.set("amp_in_r")
-  -- p_amp_in_r.time = 1 / 15
-  -- p_amp_in_r.callback = function(val)
-  --   signal.amp_in_r = val
-  --   if signal.amp_in_r > signal.amp_in_r_max then
-  --     signal.amp_in_r_max = signal.amp_in_r
-  --   end
-  -- end
-  -- input_level_poll_clock = clock.run(
-  --   function()
-  --     local step_s = 1 / 15
-  --     while true do
-  --       clock.sleep(step_s)
-  --       rpmate.repoll_input_level()
-  --     end
-  -- end)
+  -- -- co-routine: input monitor
+  audio.monitor_stereo()
+  -- Poll Left
+  p_amp_in_l = poll.set("amp_in_l")
+  p_amp_in_l.time = 1 / 15
+  p_amp_in_l.callback = function(val)
+    signal.amp_in_l = val
+    if signal.amp_in_l > signal.amp_in_l_max then
+      signal.amp_in_l_max = signal.amp_in_l
+    end
+  end
+  p_amp_in_r = poll.set("amp_in_r")
+  p_amp_in_r.time = 1 / 15
+  p_amp_in_r.callback = function(val)
+    signal.amp_in_r = val
+    if signal.amp_in_r > signal.amp_in_r_max then
+      signal.amp_in_r_max = signal.amp_in_r
+    end
+  end
+  input_level_poll_clock = clock.run(
+    function()
+      local step_s = 1 / 15
+      while true do
+        clock.sleep(step_s)
+        rpmate.repoll_input_level()
+        if pages.index == 3 then
+          -- screen_dirty = true -- <- culprit of aggressive redraw
+        end
+      end
+  end)
 
 
 end
