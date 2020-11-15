@@ -176,11 +176,11 @@ function timber_free_up_sample()
     if timber_is_playing() then
       timber_stop()
     end
-
-    -- clear previously set sample if any
-    Timber.clear_samples(0, 0)
   end
 
+  -- clear previously set sample if any
+  -- Timber.clear_samples(0, 0) -- NB: not working as expected
+  params:set('clear_'..0, true)
 end
 
 -- -------------------------------------------------------------------------
@@ -322,17 +322,23 @@ end
 -- SOFTCUT -> ENGINE PASSTHROUGH
 
 function cut_to_engine()
-  cutsample = tmp_record_folder.."buffer.wav"
-  -- softcut.buffer_write_stereo(cutsample, 0, -1)
-  softcut.buffer_write_stereo(cutsample, 0, state.rec.time)
-  -- clock.sleep(2) -- or however you want to allow time to save/load
-  load_sample_file_to_engine_timber(cutsample)
+  local cutsample = tmp_record_folder.."buffer.wav"
+
+  clock.run(function()
+      -- softcut.buffer_write_stereo(cutsample, 0, -1)
+      softcut.buffer_write_stereo(cutsample, 0, state.rec.time)
+      clock.sleep(2) -- wait a bit to prevent race condition
+      load_sample_file_to_engine_timber(cutsample)
+  end)
 end
 
 function load_sample_file_to_engine_timber(smpl)
-  -- print(inspect(Timber.samples_meta[0]))
-  -- timber_free_up_sample()
-  Timber.load_sample(0, smpl)
+
+  timber_free_up_sample()
+  params:set('sample_'..0, smpl)
+
+  -- NB: not working as expected:
+  -- Timber.load_sample(0, smpl)
   -- params:set('play_mode_' .. 0, 3)
 end
 
