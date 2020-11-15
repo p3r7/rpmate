@@ -1,6 +1,7 @@
 --
--- RPMate 200926
--- @eigenbahn
+-- rpmate.
+---
+-- @eigen
 -- llllllll.co/t/RPMate
 
 
