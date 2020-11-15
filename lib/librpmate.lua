@@ -93,6 +93,8 @@ local sampler_in_x = nil
 local playing, recording = false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
 
+local speed_recovery = 0
+
 local waiting = false
 local timber_was_playing = false
 
@@ -487,7 +489,7 @@ end
 
 
 -- -------------------------------------------------------------------------
--- UI: ACTIONS
+-- UI: MAIN PAGE (ACTIONS)
 
 --- Draw recording icon
 -- stateless
@@ -643,7 +645,49 @@ rpmate.draw_sampler = function()
 end
 
 
+-- -------------------------------------------------------------------------
+-- UI: HW SAMPLER INSTRUCTIONS PAGE
 
+rpmate.draw_instructions_mpc = function()
+  local semitones = rpmate.get_current_semitones_shift()
+  local tunes = rpmate.semitones_to_mpc_tune(semitones)
+
+  screen.level(8)
+
+  local x = 10
+  local y = 20
+  local txt = rpm_label_list[state.record_speed].."RPM".." <- "..rpm_label_list[state.playback_speed].."RPM"
+  screen.move(x, y)
+  screen.text(txt)
+
+  x = 10
+  y = 30
+  txt = "In Program > Parameter"
+  screen.move(x, y)
+  screen.text(txt)
+
+  x = 61
+  y = 40
+  txt = "> TUNING"
+  screen.move(x, y)
+  screen.text(txt)
+
+  x = 10
+  y = 50
+  txt = "TUNE: "..tunes
+  screen.move(x, y)
+  screen.text(txt)
+end
+
+rpmate.draw_instructions = function()
+  local sampler = sampler_device_list[state.sampler]
+  if sampler == "mpc-2k_2" then
+    rpmate.draw_instructions_mpc()
+  else
+    -- not supported yet
+    print()
+  end
+end
 
 -- -------------------------------------------------------------------------
 -- INIT / CLEANUP
@@ -804,7 +848,7 @@ function rpmate:enc(n, d)
       -- 3: Playback Speed
       state.playback_speed = util.clamp(state.playback_speed + op, 1, #rpm_hz_list)
       timber_update_current_playback_rate()
-    else
+    elseif pages.index == 1 then
       -- Shift+3: HW Sampler Model
       state.sampler = util.clamp(state.sampler + op, 1, #sampler_device_list)
     end
@@ -827,6 +871,8 @@ function rpmate:redraw()
     rpmate.draw_sampler()
 
     rpmate.draw_action()
+  elseif pages.index == 2 then
+    rpmate.draw_instructions()
   end
 
   screen.update()
