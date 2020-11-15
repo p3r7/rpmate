@@ -85,7 +85,7 @@ local screen_dirty = false
 
 local pages
 local tabs
-local tab_titles = {{"RPMate"}, {"HW Sampler Inst."}, {"Cut"}, {"EQ"}, {"Dirty"}}
+local tab_titles = {{"RPMate"}, {"HW Sampler Inst."}, {"Input Level"}, {"Cut"}, {"EQ"}, {"Dirty"}}
 local eq_l_dial
 local eq_m_dial
 local eq_h_dial
@@ -720,6 +720,45 @@ rpmate.draw_instructions = function()
   end
 end
 
+
+-- -------------------------------------------------------------------------
+-- UI: INPUT LEVEL
+
+rpmate.draw_input_uv_meter = function(value, maximum, offset)
+  local viewport = { width = 128, height = 64 }
+  local size = {width = 4, height = viewport.height - 4}
+  local pos = {x = viewport.width - size.width - offset, y = 2}
+  ratio = value / maximum
+  activity = util.clamp(size.height - (ratio * size.height), 3, size.height)
+  screen.line_width(size.width)
+
+  screen.level(1)
+  screen.move(pos.x,pos.y)
+  screen.line(pos.x,pos.y + size.height)
+  screen.stroke()
+  screen.level(15)
+  screen.move(pos.x,pos.y + size.height)
+  screen.line(pos.x,activity)
+  screen.stroke()
+  screen.line_width(1)
+end
+
+local signal = { amp_in_l = 0, amp_in_r = 0, amp_in_l_max = 0, amp_in_r_max = 0 }
+local p_amp_in_l
+local p_amp_in_r
+
+rpmate.repoll_input_level = function()
+  p_amp_in_r:update()
+  p_amp_in_l:update()
+end
+
+
+rpmate.draw_input_levels = function()
+  rpmate.draw_input_uv_meter(signal.amp_in_l, signal.amp_in_l_max, 5)
+  rpmate.draw_input_uv_meter(signal.amp_in_r, signal.amp_in_r_max, 0)
+end
+
+
 -- -------------------------------------------------------------------------
 -- INIT / CLEANUP
 
@@ -808,6 +847,34 @@ rpmate.init = function()
         timber_was_playing = is_playing
       end
   end)
+
+  -- -- -- co-routine: input monitor
+  -- audio.monitor_stereo()
+  -- -- Poll Left
+  -- p_amp_in_l = poll.set("amp_in_l")
+  -- p_amp_in_l.time = 1 / 15
+  -- p_amp_in_l.callback = function(val)
+  --   signal.amp_in_l = val
+  --   if signal.amp_in_l > signal.amp_in_l_max then
+  --     signal.amp_in_l_max = signal.amp_in_l
+  --   end
+  -- end
+  -- p_amp_in_r = poll.set("amp_in_r")
+  -- p_amp_in_r.time = 1 / 15
+  -- p_amp_in_r.callback = function(val)
+  --   signal.amp_in_r = val
+  --   if signal.amp_in_r > signal.amp_in_r_max then
+  --     signal.amp_in_r_max = signal.amp_in_r
+  --   end
+  -- end
+  -- input_level_poll_clock = clock.run(
+  --   function()
+  --     local step_s = 1 / 15
+  --     while true do
+  --       clock.sleep(step_s)
+  --       rpmate.repoll_input_level()
+  --     end
+  -- end)
 
 
 end
@@ -912,6 +979,8 @@ function rpmate:redraw()
     rpmate.draw_action()
   elseif pages.index == 2 then
     rpmate.draw_instructions()
+  elseif pages.index == 3 then
+    rpmate.draw_input_levels()
   end
 
   screen.update()
