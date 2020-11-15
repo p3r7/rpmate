@@ -160,6 +160,7 @@ end
 
 function timber_is_playing()
   local sample_id = 0
+  -- REVIEW: '#' shorthand for length doesn't appear to work
   return len(Timber.samples_meta[sample_id].positions) ~= 0
 end
 
@@ -559,7 +560,7 @@ rpmate.init = function()
   rpmate.update_rate(voice)
 
   -- UI
-  pages = ui_lib.Pages.new(1, len(tab_titles))
+  pages = ui_lib.Pages.new(1, #tab_titles)
   tabs = ui_lib.Tabs.new(1, tab_titles[pages.index])
 
   -- eq_l_dial = UI.Dial.new(72, 19, 22, fm1_amount.actual * 100, 0, 100, 1)
@@ -637,15 +638,15 @@ function rpmate:enc(n, d)
     -- 3: Record Speed
     local op = 1
     if d < 0 then op = -1 end
-    state.record_speed = util.clamp(state.record_speed + op, 1, len(rpm_hz_list))
+    state.record_speed = util.clamp(state.record_speed + op, 1, #rpm_hz_list)
   elseif n == 3 then
     -- 3: Playback Speed
     local op = 1
     if d < 0 then op = -1 end
     if shift then
-      state.sampler = util.clamp(state.sampler + op, 1, len(sampler_device_list))
+      state.sampler = util.clamp(state.sampler + op, 1, #sampler_device_list)
     else
-      state.playback_speed = util.clamp(state.playback_speed + op, 1, len(rpm_hz_list))
+      state.playback_speed = util.clamp(state.playback_speed + op, 1, #rpm_hz_list)
     end
   end
   rpmate.update_rate()
