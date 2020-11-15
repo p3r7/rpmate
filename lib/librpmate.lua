@@ -16,7 +16,6 @@
 
 -- local math = require "math"
 local ui_lib = require "ui"
-local fileselect = require "fileselect"
 local textentry = require "textentry"
 local MusicUtil = require "musicutil"
 
@@ -24,52 +23,84 @@ local inspect = include('rpmate/lib/inspect')
 
 
 -- -------------------------------------------------------------------------
--- STATE
+-- CONSTANTS
 
-local rpmate = {}
+-- Timber
+local NUM_SAMPLES = 1
 
-local shift = false
-local screen_dirty = false
+-- tmp buffer file
+local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
+-- local tmp_record_folder = '/home/we/dust/audio/'..'rpmate_tmp/'
 
-local playing, recording, filesel, settings, mounted, blink = false, false, false, false, false, false
-local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
-
-local waiting = false
-local timber_was_playing = false
-
+-- record / playback speeds
 local rpm_hz_list    =  { 0.28, 0.55, 0.75, 1.3, 2.667, 8.667 }
 local rpm_label_list =  { "16", "33", "45", "78", "160", "520" }
+
+-- devices: input
 local rpm_device_list = { "tt-16", "tt-33", "tt-45", "tt-78", "edison-cylinder", "washing-machine" }
 local rpm_device_w =    { 26, 26, 26, 26, 27, 26 }
 local rpm_device_y =             { 20, 20, 20, 20, 10, 10 }
 local rpm_device_cnnx_rel_x =    { 17, 17, 17, 17, 17, 17 }
-local rpm_disk_d =      { 9, 12 , 7, 10 }
 
-local input_device_out_x = nil
-local norns_in_x = nil
-local norns_out_x = nil
-local sampler_in_x = nil
-
+-- device: norns
 local norns_w = 14
 local norns_in_rel_x = 6
 local norns_out_rel_x = 9
 
+-- devices: hw samplers
 local sampler_label_list =  { "MPC 2k", "S950", "SP-404" }
 local sampler_device_list = { "mpc-2k_2", "s950", "sp-404" }
 local sampler_device_w =    { 28, 33, 13 }
 local sampler_device_cnnx_rel_x =    { 17, 22, 5 }
 
 
-local tmp_record_folder = '/dev/shm/'..'rpmate_tmp/'
--- local tmp_record_folder = '/home/we/dust/audio/'..'rpmate_tmp/'
+-- -------------------------------------------------------------------------
+-- STATE: I/O
 
--- UI
+local shift = false
+local screen_dirty = false
+
+
+-- -------------------------------------------------------------------------
+-- STATE: UI
+
 local pages
 local tabs
 local tab_titles = {{"RPMate"}, {"HW Sampler Inst."}, {"Cut"}, {"EQ"}, {"Dirty"}}
 local eq_l_dial
 local eq_m_dial
 local eq_h_dial
+
+-- devices connectors
+local input_device_out_x = nil
+local norns_in_x = nil
+local norns_out_x = nil
+local sampler_in_x = nil
+
+
+-- -------------------------------------------------------------------------
+-- STATE: FUNCTIONAL
+
+local rpmate = {}
+
+local playing, recording = false, false
+local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
+
+local waiting = false
+local timber_was_playing = false
+
+local state = {
+  record_speed = 2,
+  playback_speed = 2,
+  sampler = 1,
+
+  -- rec
+  rec = { time = 0 },
+
+  -- track
+  time = 0,
+  level = 1,
+}
 
 
 -- MPC instructions:
@@ -91,45 +122,6 @@ local eq_h_dial
 --    12 * log2((78-(16*78/100))/33) = 11.873
 
 
-local NUM_SAMPLES = 1 -- for timber init
-
-local ui = {
-  plate = {
-    x = 20,
-    y = 35,
-
-    out_r = 15,
-    in_r = 14,
-
-    edge_l = 2,
-    mat_l = 1,
-    disk_l = 6,
-  },
-  arm = {
-    delta_w_disk_edge = 3,
-    length = 22,
-    l = 0,
-    base = {
-      l = 1,
-      r = 5,
-    }
-  }
-}
-
-local state = {
-  record_speed = 2,
-  playback_speed = 2,
-  sampler = 1,
-
-  -- rec
-  rec = { arm = false, time = 0, start = 0, level = 1, pre = 1, threshold = 1 },
-
-  -- track
-  time = 0,
-  s = 1,
-  e = 1,
-  level = 1,
-}
 
 
 -- -------------------------------------------------------------------------
