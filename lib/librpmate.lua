@@ -27,6 +27,8 @@ local screen_dirty = false
 local playing, recording, filesel, settings, mounted, blink = false, false, false, false, false, false
 local speed, clip_length, rec_vol, input_vol, engine_vol, total_tracks, in_l, in_r = 0, 60, 1, 1, 0, 4, 0, 0
 
+local timber_was_playing = false
+
 local rpm_hz_list    =  { 0.28, 0.55, 0.75, 1.3, 2.667, 8.667 }
 local rpm_label_list =  { "16", "33", "45", "78", "160", "520" }
 local rpm_device_list = { "tt-16", "tt-33", "tt-45", "tt-78", "edison-cylinder", "washing-machine" }
@@ -569,6 +571,7 @@ rpmate.init = function()
 
   -- params:add_separator()
 
+  -- co-routine: screen redraw
   local redraw_fps = 30
   clock.run(
     function()
@@ -581,6 +584,22 @@ rpmate.init = function()
         end
       end
   end)
+
+  -- co-routine: playback state check
+  clock.run(
+    function()
+      local step_s = 1 / redraw_fps
+      while true do
+        clock.sleep(step_s)
+        local is_playing = timber_is_playing()
+        if is_playing ~= timber_was_playing then
+          screen_dirty = true
+        end
+        timber_was_playing = is_playing
+      end
+  end)
+
+
 end
 
 
