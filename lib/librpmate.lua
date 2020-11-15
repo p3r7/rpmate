@@ -648,11 +648,12 @@ end
 -- -------------------------------------------------------------------------
 -- UI: HW SAMPLER INSTRUCTIONS PAGE
 
-rpmate.draw_instructions_mpc = function()
-  local semitones = rpmate.get_current_semitones_shift()
-  local tunes = rpmate.semitones_to_mpc_tune(semitones)
-
+rpmate.draw_instructions_generic = function(menu_line_1, menu_line_2, params_line, menu_line_2_shift)
   screen.level(8)
+
+  if not menu_line_2_shift then
+    menu_line_2_shift = 0
+  end
 
   local x = 10
   local y = 20
@@ -660,32 +661,54 @@ rpmate.draw_instructions_mpc = function()
   screen.move(x, y)
   screen.text(txt)
 
-  x = 10
   y = 30
-  txt = "In Program > Parameter"
+  txt = menu_line_1
   screen.move(x, y)
   screen.text(txt)
 
-  x = 61
+  x = x + menu_line_2_shift
   y = 40
-  txt = "> TUNING"
+  txt = menu_line_2
   screen.move(x, y)
   screen.text(txt)
 
   x = 10
   y = 50
-  txt = "TUNE: "..tunes
+  txt = params_line
   screen.move(x, y)
   screen.text(txt)
+
+end
+
+rpmate.draw_instructions_mpc = function()
+  local semitones = rpmate.get_current_semitones_shift()
+  local tunes = rpmate.semitones_to_mpc_tune(semitones)
+  rpmate.draw_instructions_generic(
+    "In Program > Parameter",
+    "> TUNING",
+    "TUNE: "..tunes,
+    51
+  )
+end
+
+rpmate.draw_instructions_sp404 = function()
+  rpmate.draw_instructions_generic(
+    "Hit BPM button,",
+    " turn BPM CONTROL knob",
+    ""
+  )
+
 end
 
 rpmate.draw_instructions = function()
   local sampler = sampler_device_list[state.sampler]
   if sampler == "mpc-2k_2" then
     rpmate.draw_instructions_mpc()
+  elseif sampler == "sp-404" then
+    rpmate.draw_instructions_sp404()
   else
     -- not supported yet
-    print()
+    print("not supported yet")
   end
 end
 
