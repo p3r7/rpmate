@@ -720,7 +720,7 @@ rpmate.init = function()
   -- tmp recording storage
   if not util.file_exists(tmp_record_folder) then util.make_dir(tmp_record_folder) end
 
-
+  audio.rev_off()
 
   params:add_separator()
   params:add_separator("rpmate")
@@ -805,6 +805,8 @@ end
 
 
 function rpmate:cleanup()
+  audio.rev_on()
+
   poll:clear_all()
   print('cleanup')
 end
