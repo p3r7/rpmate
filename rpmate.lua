@@ -8,6 +8,9 @@
 --
 -- K1 held is SHIFT
 --
+-- Anywhere:
+--  E1: switch page
+--
 -- Main screen:
 --  E2: record speed
 --  E3: playback speed
