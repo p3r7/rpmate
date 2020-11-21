@@ -13,6 +13,8 @@ local Graph = require "graph"
 local FilterGraph = require "filtergraph"
 local EnvGraph = require "envgraph"
 
+local Controlspecs = include("lib/controlspecs")
+
 local TimberEq = {}
 
 TimberEq.FileSelect = require "fileselect"
@@ -69,7 +71,7 @@ options.PLAY_MODE_IDS = {{0, 1, 2, 3}, {1, 2, 3}}
 
 options.SCALE_BY = {"Percentage", "Length", "Bars"}
 options.SCALE_BY_NO_BARS = {"Percentage", "Length"}
-specs.BY_PERCENTAGE = ControlSpec.new(10, 500, "lin", 0, 100, "%")
+specs.BY_PERCENTAGE = ControlSpec.new(10, 10000, "lin", 0, 100, "%")
 
 options.BY_BARS = {"1/64", "1/48", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "2/3", "3/4", "1 bar"}
 options.BY_BARS_DECIMAL = {1/64, 1/48, 1/32, 1/24, 1/16, 1/12, 1/8, 1/6, 1/4, 1/3, 1/2, 2/3, 3/4, 1}
@@ -96,7 +98,7 @@ specs.MOD_ENV_ATTACK = ControlSpec.new(0.003, 5, "lin", 0, 1, "s")
 specs.MOD_ENV_DECAY = ControlSpec.new(0.003, 5, "lin", 0, 2, "s")
 specs.MOD_ENV_SUSTAIN = ControlSpec.new(0, 1, "lin", 0, 0.65, "")
 specs.MOD_ENV_RELEASE = ControlSpec.new(0.003, 10, "lin", 0, 1, "s")
-options.QUALITY = {"Nasty", "Low", "Medium", "High"}
+options.QUALITY = {"Nasty", "Low", "Medium", "High", "Custom"}
 specs.AMP = ControlSpec.new(-48, 16, 'db', 0, 0, "dB")
 
 QUALITY_SAMPLE_RATES = {8000, 16000, 32000, 48000}
@@ -752,7 +754,7 @@ end
 function TimberEq.add_sample_params(id, include_beat_params, extra_params)
 
   if id then
-    local num_params = 50
+    local num_params = 60
     if include_beat_params then num_params = num_params + 1 end
     if extra_params then num_params = num_params + #extra_params end
     params:add_group("Sample " .. id, num_params)
@@ -789,11 +791,29 @@ function TimberEq.add_sample_params(id, include_beat_params, extra_params)
     TimberEq.views_changed_callback(id)
   end}
 
-  params:add{type = "option", id = "quality_" .. id, name = "Quality", options = options.QUALITY, default = #options.QUALITY, action = function(value)
-    engine.downSampleTo(id, QUALITY_SAMPLE_RATES[value])
-    engine.bitDepth(id, QUALITY_BIT_DEPTHS[value])
-    TimberEq.views_changed_callback(id)
-    TimberEq.setup_params_dirty = true
+  params:add{type = "option", id = "quality_" .. id, name = "Quality", options = options.QUALITY, default = (#options.QUALITY - 1), action = function(value)
+               if options.QUALITY[value] ~= "Custom" then
+                 params:set('sample_rate_'..id, QUALITY_SAMPLE_RATES[value])
+                 params:set('bit_depth_'..id, QUALITY_BIT_DEPTHS[value])
+               end
+  end}
+  params:add{type = "number", id = "sample_rate_" .. id, name = "Sample Rate", min = 8000, max = 48000, default = 48000, action = function(value)
+               local quality = params:get('quality_'..id)
+               if options.QUALITY[quality] ~= "Custom" and QUALITY_SAMPLE_RATES[quality] ~= value then
+                 params:set('quality_'..id, #options.QUALITY)
+               end
+               engine.downSampleTo(id, value)
+               TimberEq.views_changed_callback(id)
+               TimberEq.setup_params_dirty = true
+  end}
+  params:add{type = "number", id = "bit_depth_" .. id, name = "Bit Depth", min = 8, max = 24, default = 24, action = function(value)
+               local quality = params:get('quality_'..id)
+               if options.QUALITY[quality] ~= "Custom" and QUALITY_BIT_DEPTHS[quality] ~= value then
+                 params:set('quality_'..id, #options.QUALITY)
+               end
+               engine.bitDepth(id, value)
+               TimberEq.views_changed_callback(id)
+               TimberEq.setup_params_dirty = true
   end}
   params:add{type = "number", id = "transpose_" .. id, name = "Transpose", min = -48, max = 48, default = 0, formatter = format_st, action = function(value)
     engine.transpose(id, value)
@@ -927,6 +947,40 @@ function TimberEq.add_sample_params(id, include_beat_params, extra_params)
     engine.filterTracking(id, value)
     TimberEq.views_changed_callback(id)
   end}
+
+
+  -- Equalizer
+  params:add_separator("3-Band EQ")
+
+  params:add{type = "control", id = "eq_low_freq_" .. id, name = "Low Freq", controlspec = ControlSpec.new(20, 400, "exp", 1, 70, "Hz"), action = function(value)
+               engine.ls_freq(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_mid_freq_" .. id, name = "Mid Freq", controlspec = ControlSpec.new(100, 8000, "exp", 1, 1200, "Hz"), action = function(value)
+               engine.mid_freq(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_high_freq_" .. id, name = "High Freq", controlspec = ControlSpec.new(1000, 20000, "exp", 1, 5000, "Hz"), action = function(value)
+               engine.hs_freq(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_low_amp_" .. id, name = "Low Amp", controlspec = Controlspecs.BOOSTCUT, action = function(value)
+               engine.ls_amp(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_mid_amp_" .. id, name = "Mid Amp", controlspec = Controlspecs.BOOSTCUT, action = function(value)
+               engine.mid_amp(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_high_amp_" .. id, name = "High Amp", controlspec = Controlspecs.BOOSTCUT, action = function(value)
+               engine.hs_amp(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+  params:add{type = "control", id = "eq_mid_q_" .. id, name = "Mid Q", controlspec = ControlSpec.new(0.1, 4, "lin", 0.1, 1, ""), action = function(value)
+               engine.mid_q(id, value)
+               TimberEq.views_changed_callback(id)
+  end}
+
 
   params:add_separator("Pan & Amp")
 

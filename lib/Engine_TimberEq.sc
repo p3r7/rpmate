@@ -106,6 +106,14 @@ Engine_TimberEq : CroneEngine {
 			amp: 0,
 			ampModLfo1: 0,
 			ampModLfo2: 0,
+
+			ls_freq: 70,
+			ls_amp: 1.0,
+			mid_freq: 1000,
+			mid_amp: 1.0,
+			mid_q: 1.0,
+			hs_freq: 5000,
+			hs_amp: 1.0,
 		);
 
 		voiceGroup = Group.new(context.xg);
@@ -308,7 +316,8 @@ Engine_TimberEq : CroneEngine {
 				ampAttack, ampDecay, ampSustain, ampRelease, modAttack, modDecay, modSustain, modRelease,
 				downSampleTo, bitDepth,
 				filterFreq, filterReso, filterType, filterTracking, filterFreqModLfo1, filterFreqModLfo2, filterFreqModEnv, filterFreqModVel, filterFreqModPressure,
-				pan, panModLfo1, panModLfo2, panModEnv, ampModLfo1, ampModLfo2;
+				pan, panModLfo1, panModLfo2, panModEnv, ampModLfo1, ampModLfo2,
+				ls_freq, ls_amp, mid_freq, mid_amp, mid_q, hs_freq, hs_amp;
 
 				var i_nyquist = SampleRate.ir * 0.5, i_cFreq = 48.midicps, i_origFreq = 60.midicps, signal, freqRatio, freqModRatio, filterFreqRatio,
 				killEnvelope, ampEnvelope, modEnvelope, lfo1, lfo2, i_controlLag = 0.005;
@@ -340,6 +349,15 @@ Engine_TimberEq : CroneEngine {
 
 				// Player
 				signal = SynthDef.wrap(players[i], [\kr, \kr, \kr, \kr], [freqRatio, sampleRate, gate, playMode]);
+
+				// 3band Equalizer
+				// signal = BLowShelf.ar(signal, freq: \ls_freq.kr(70), db: \ls_amp.kr(1.0).ampdb);
+				// signal = BPeakEQ.ar(signal, freq: \mid_freq.kr(1000), rq: \mid_q.kr(1.0).reciprocal, db: \mid_amp.kr(1.0).ampdb);
+				// signal = BHiShelf.ar(signal, freq: \hs_freq.kr(5000), db: \hs_amp.kr(1.0).ampdb);
+				// signal = BLowShelf.ar(signal, freq: ls_freq, db: ls_amp.ampdb);
+				// signal = BPeakEQ.ar(signal, freq: mid_freq, rq: mid_q.reciprocal, db: mid_amp.ampdb);
+				// signal = BHiShelf.ar(signal, freq: hs_freq, db: hs_amp.ampdb);
+
 
 				// Downsample and bit reduction
 				if(i > 1, { // Streaming
@@ -972,6 +990,14 @@ Engine_TimberEq : CroneEngine {
 				\ampModLfo1, sample.ampModLfo1,
 				\ampModLfo2, sample.ampModLfo2,
 
+				// Equalizer
+				\ls_freq, sample.ls_freq,
+				\ls_amp, sample.ls_amp,
+				\mid_freq, sample.mid_freq,
+				\mid_q, sample.mid_q,
+				\hs_freq, sample.hs_freq,
+				\hs_amp, sample.hs_amp,
+
 			], target: voiceGroup).onFree({
 
 				if(sample.streaming == 1, {
@@ -1396,6 +1422,36 @@ Engine_TimberEq : CroneEngine {
 		this.addCommand(\ampModLfo2, "if", {
 			arg msg;
 			this.setArgOnSample(msg[1], \ampModLfo2, msg[2]);
+		});
+
+		// Equalizer
+		this.addCommand(\ls_freq, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \ls_freq, msg[2]);
+		});
+		this.addCommand(\ls_amp, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \ls_amp, msg[2]);
+		});
+		this.addCommand(\mid_freq, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \mid_freq, msg[2]);
+		});
+		this.addCommand(\mid_amp, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \mid_amp, msg[2]);
+		});
+		this.addCommand(\mid_q, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \mid_q, msg[2]);
+		});
+		this.addCommand(\hs_freq, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \hs_freq, msg[2]);
+		});
+		this.addCommand(\hs_amp, "if", {
+			arg msg;
+			this.setArgOnSample(msg[1], \hs_amp, msg[2]);
 		});
 
 	}
