@@ -28,7 +28,7 @@
 --  SHIFT + E2: sample rate (x 1k)
 --  E3: bit depth
 
-local rpmate = include('rpmate/lib/librpmate')
+local rpmate = include('lib/librpmate')
 
 function init()
   rpmate.active = true

@@ -14,19 +14,19 @@
 -- -------------------------------------------------------------------------
 -- IMPORTS
 
-local inspect = include('rpmate/lib/inspect')
+local inspect = include('lib/inspect')
 
-include('rpmate/lib/lua/io')
-include('rpmate/lib/lua/ui')
+include('lib/lua/io')
+include('lib/lua/ui')
 
-include('rpmate/lib/lua/math')
-include('rpmate/lib/lua/softcut') -- record
-timber_wrapper = include('rpmate/lib/lua/timber')  -- playback
+include('lib/lua/math')
+include('lib/lua/softcut') -- record
+timber_wrapper = include('lib/lua/timber')  -- playback
 
-include('rpmate/lib/lua/screen_main')
-include('rpmate/lib/lua/screen_insts')
-include('rpmate/lib/lua/screen_input_level')
-include('rpmate/lib/lua/screen_dirtying')
+include('lib/lua/screen_main')
+include('lib/lua/screen_insts')
+include('lib/lua/screen_input_level')
+include('lib/lua/screen_dirtying')
 
 
 -- -------------------------------------------------------------------------

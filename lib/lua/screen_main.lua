@@ -3,8 +3,8 @@
 --
 
 
-include('rpmate/lib/lua/math')
-include('rpmate/lib/lua/devices')
+include('lib/lua/math')
+include('lib/lua/devices')
 
 
 -- -------------------------------------------------------------------------

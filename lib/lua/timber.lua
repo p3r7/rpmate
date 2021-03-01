@@ -5,8 +5,8 @@
 
 local MusicUtil = require "musicutil"
 
-include('rpmate/lib/lua/core')
-include('rpmate/lib/lua/io')
+include('lib/lua/core')
+include('lib/lua/io')
 
 unrequire("rpmate/lib/timbereq_engine")
 local Timber = include("rpmate/lib/timbereq_engine")

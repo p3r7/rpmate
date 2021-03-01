@@ -3,8 +3,8 @@
 --
 
 
-include('rpmate/lib/lua/io')
-include('rpmate/lib/lua/ui')
+include('lib/lua/io')
+include('lib/lua/ui')
 
 
 -- -------------------------------------------------------------------------
