@@ -9,7 +9,7 @@ norns as a sampler buddy.
 
 This script allows to record a sound an play it back at various RPM ratios.
 
-The main use is to replay the sample sped up into a hardware sampler to free up memory and add some punch.
+The main use is to replay the sample sped up into a hardware sampler to save memory and add some punch.
 
 The second page gives instructions on how to then speed down the recorded sample to retrieve original speed/tune.
 
