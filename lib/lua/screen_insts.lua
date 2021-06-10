@@ -77,7 +77,7 @@ end
 function draw_instructions_mpc(record_speed, playback_speed)
   local in_hz = rpm_hz_list[record_speed]
   local out_hz = rpm_hz_list[playback_speed]
-  local semitones = playback_speed_to_semitones(out_hz / in_hz)
+  local semitones = - playback_speed_to_semitones(out_hz / in_hz)
   local tunes = semitones_to_mpc_tune(semitones)
   draw_instructions_generic(
     record_speed, playback_speed,
@@ -91,7 +91,7 @@ end
 function draw_instructions_s950(record_speed, playback_speed)
   local in_hz = rpm_hz_list[record_speed]
   local out_hz = rpm_hz_list[playback_speed]
-  local semitones = playback_speed_to_semitones(out_hz / in_hz)
+  local semitones = - playback_speed_to_semitones(out_hz / in_hz)
   local semitones_label = math.ceil(semitones)
   if semitones_label < 0 then
     semitones_label = "- "..(-1 * semitones_label)
