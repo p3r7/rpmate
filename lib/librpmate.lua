@@ -100,12 +100,16 @@ end
 -- -------------------------------------------------------------------------
 -- INIT / CLEANUP
 
-rpmate.init = function()
+local reverb_was_on = false
 
+rpmate.init = function()
   -- tmp recording storage
   if not util.file_exists(tmp_record_folder) then util.make_dir(tmp_record_folder) end
 
-  audio.rev_off()
+  if params:string("reverb") == 'ON' then
+    reverb_was_on = true
+    audio.rev_off()
+  end
 
   params:add_separator()
   params:add_separator("rpmate")
@@ -143,7 +147,9 @@ end
 
 
 function rpmate:cleanup()
-  audio.rev_on()
+  if reverb_was_on then
+    audio.rev_on()
+  end
 
   poll:clear_all()
 
